@@ -1,0 +1,29 @@
+
+> unstack@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.23
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.10:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 3.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 7.3s (653 modules)
+ GET / 200 in 2199ms
+ GET / 200 in 124ms
+ ○ Compiling /api/plan ...
+ ✓ Compiled /api/plan in 2.7s (856 modules)
+[api/plan] failed to create session {
+  code: '42501',
+  details: null,
+  hint: null,
+  message: 'new row violates row-level security policy for table "sessions"'
+}
+ POST /api/plan 500 in 12964ms
+ ○ Compiling /plan ...
+ ✓ Compiled /plan in 568ms (849 modules)
+ GET /plan?session= 200 in 1199ms
+ ✓ Compiled /history in 491ms (851 modules)
+ GET /history 200 in 1285ms

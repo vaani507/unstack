@@ -30,3 +30,16 @@ create table feedback (
   feedback_type text not null, -- done | too_hard | skip
   created_at timestamptz default now()
 );
+
+-- Row Level Security.
+-- Unstack is currently anonymous (no auth), so all tables grant the anon
+-- role full access. If you add user accounts later, replace these permissive
+-- policies with user-scoped ones (e.g. using (user_id = auth.uid())).
+
+alter table sessions enable row level security;
+alter table steps enable row level security;
+alter table feedback enable row level security;
+
+create policy "anon full access sessions" on sessions for all to anon using (true) with check (true);
+create policy "anon full access steps" on steps for all to anon using (true) with check (true);
+create policy "anon full access feedback" on feedback for all to anon using (true) with check (true);
