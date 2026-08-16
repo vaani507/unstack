@@ -11,6 +11,9 @@ if (!apiKey) {
 }
 
 export const openai = new OpenAI({
+  // Optional: point at any OpenAI-compatible server by setting OPENAI_BASE_URL
+  // (e.g. a local Ollama: http://localhost:11434/v1). Defaults to OpenAI.
+  baseURL: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
   // The SDK throws at construction time if `apiKey` is empty/undefined, which
   // would crash every route (and any script) on import. Fall back to a
   // placeholder so the module always loads; real API calls made without a

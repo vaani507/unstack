@@ -43,6 +43,26 @@ re-splits any step you flag as "too hard."
 
    These are public/browser-safe; never commit `.env.local` (it's gitignored).
 
+### Run the planner without OpenAI (Ollama)
+
+The planner only speaks an OpenAI-compatible chat API, so you can run it
+fully locally with [Ollama](https://ollama.com) — no API key, no credits:
+
+```bash
+ollama pull llama3.2       # or any instruction-following model
+```
+
+Then in `.env.local`:
+
+```
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_PLANNER_MODEL=llama3.2
+OPENAI_API_KEY=ollama
+```
+
+Keep `NEXT_PUBLIC_SUPABASE_*` as above. Bigger models (e.g. `qwen2.5:7b`)
+follow the JSON + validation rules more reliably than small ones.
+
 3. **Create the tables**
 
    In the Supabase dashboard SQL editor, run the contents of
