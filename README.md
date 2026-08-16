@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Unstack
 
-## Getting Started
+Break the freeze. One tiny step at a time.
 
-First, run the development server:
+Unstack is a calm, executive-dysfunction-friendly planning app. You describe
+one overwhelming thing ("I have an exam next week and haven't started
+studying"), tell it how much energy and time you have right now, and it
+turns that into a sequence of small concrete micro-actions — the first one
+deliberately near-zero activation energy.
+
+Instead of a todo list, Unstack runs you through one action at a time in a
+two-state session flow, forces a break every three completed steps, and
+re-splits any step you flag as "too hard."
+
+## Stack
+
+- **Next.js 15** (App Router, server + client components)
+- **OpenAI** — planning pipeline (generate → validate → regenerate → fallback)
+- **Supabase** — Postgres (`sessions`, `steps`, `feedback`) via the Data API
+- **Tailwind CSS v4** — custom muted palette, sensory-mode tokens
+
+## Local setup
+
+1. **Install**
+
+   ```bash
+   npm install
+   ```
+
+2. **Environment variables**
+
+   ```bash
+   copy .env.local.example .env.local
+   ```
+
+   Fill in:
+
+   - `OPENAI_API_KEY` — from the [OpenAI dashboard](https://platform.openai.com/api-keys)
+   - `NEXT_PUBLIC_SUPABASE_URL` — your project URL, e.g. `https://<ref>.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — the publishable key from
+     **Project Settings → API Keys** (newer projects call it "Publishable key";
+     it is the drop-in replacement for the legacy `anon` key)
+
+   These are public/browser-safe; never commit `.env.local` (it's gitignored).
+
+3. **Create the tables**
+
+   In the Supabase dashboard SQL editor, run the contents of
+   [`supabase/schema.sql`](supabase/schema.sql). It creates the `sessions`,
+   `steps`, and `feedback` tables.
+
+4. **Run**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000).
+
+## Planner sanity-check script
+
+Exercises the OpenAI planning pipeline without touching Supabase:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx tsx --env-file=.env.local scripts/test-planner.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run a single goal with custom energy/time:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx tsx --env-file=.env.local scripts/test-planner.ts --goal "Clean my desk" --energy low --time 5min
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API routes
 
-## Learn More
+| Route                 | Purpose                                                          |
+| --------------------- | ---------------------------------------------------------------- |
+| `POST /api/plan`      | Generate steps from a goal + energy + time, persist session + steps |
+| `POST /api/session`   | Create a bare session row (no steps)                              |
+| `GET /api/session`    | Fetch a session with its steps by `?id=`                         |
+| `POST /api/step/complete` | Mark the current step done, advance to the next                  |
+| `POST /api/adapt`     | Re-split a "too hard" step into smaller sub-steps                 |
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The core idea: **LLM generates, deterministic rules enforce.**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Planner** — LLM converts the goal into micro-actions (≤3 min each, one
+   action per step, concrete verb, no "and", no questions).
+2. **Validator** — rule-based check; rejected steps are regenerated, with a
+   manual fallback step as a last resort.
+3. **Sequencer** — picks the lowest-numbered pending step as "the one."
+4. **User feedback** — done / too hard / skip.
+5. **Adaptation** — "too hard" steps get split into smaller ones and re-inserted.
 
-## Deploy on Vercel
+## Sensory modes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Top-right menu on the session screen switches between **Calm**, **Focus**, and
+**Low stimulation**, and scales the root text size (100–150%). The OS
+`prefers-reduced-motion` setting always wins for animations.
