@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AppearanceMenu from "./session/[id]/appearance-menu";
 
 type Energy = "low" | "medium" | "high";
 type TimeAvailable = "5min" | "15min" | "30min" | "1hour";
@@ -85,7 +86,9 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 py-16">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-2xl flex-col justify-center px-6 py-16">
+      <AppearanceMenu />
+
       <header className="mb-14">
         <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">
           Unstack

@@ -232,6 +232,76 @@ const FALLBACK_STEP: PlannerStep = {
   duration_seconds: 20,
 };
 
+// ---------------------------------------------------------------------------
+// Demo mode — curated plans so the pitch runs without a working model
+// ---------------------------------------------------------------------------
+
+interface DemoSample {
+  keywords: string[];
+  steps: PlannerStep[];
+}
+
+const DEMO_SAMPLES: DemoSample[] = [
+  {
+    keywords: ["exam", "study", "test", "revision"],
+    steps: [
+      { action: "Open the course page in your browser", duration_seconds: 40 },
+      { action: "Read the first unit heading", duration_seconds: 60 },
+      { action: "Write down one exam topic on a sticky note", duration_seconds: 60 },
+      { action: "Read the first two lines of the unit notes", duration_seconds: 60 },
+      { action: "Highlight one key term you don't recognize", duration_seconds: 90 },
+      { action: "Type that term onto a blank flashcard", duration_seconds: 90 },
+    ],
+  },
+  {
+    keywords: ["desk", "room", "clean", "tidy", "laundry", "organiz"],
+    steps: [
+      { action: "Set a timer on your phone for 3 minutes", duration_seconds: 20 },
+      { action: "Put one empty cup or plate in the kitchen", duration_seconds: 60 },
+      { action: "Throw away one item of trash from your desk", duration_seconds: 60 },
+      { action: "Stack one pile of loose papers together", duration_seconds: 90 },
+      { action: "Wipe the desk surface with a cloth", duration_seconds: 120 },
+    ],
+  },
+  {
+    keywords: ["email", "message", "reply", "inbox"],
+    steps: [
+      { action: "Open your inbox", duration_seconds: 30 },
+      { action: "Sort the inbox by oldest message first", duration_seconds: 60 },
+      { action: "Reply to the oldest single message with one sentence", duration_seconds: 120 },
+      { action: "Mark the next unread message as read", duration_seconds: 30 },
+      { action: "Forward one message you can't answer to someone who can", duration_seconds: 90 },
+    ],
+  },
+  {
+    keywords: ["resume", "cv", "apply", "internship", "job", "cover letter"],
+    steps: [
+      { action: "Find your most recent resume file on this computer", duration_seconds: 60 },
+      { action: "Open the resume file", duration_seconds: 30 },
+      { action: "Read the first bullet under your latest role", duration_seconds: 60 },
+      { action: "Type one clear verb into the start of that bullet", duration_seconds: 90 },
+      { action: "Save a copy of the file named with today's date", duration_seconds: 60 },
+      { action: "Type the job name you're applying to into a search bar", duration_seconds: 60 },
+    ],
+  },
+];
+
+const DEMO_FALLBACK_STEPS: PlannerStep[] = [
+  { action: "Write your goal on a sticky note", duration_seconds: 60 },
+  { action: "Stick the note beside your screen", duration_seconds: 30 },
+  { action: "Open a blank document on this computer", duration_seconds: 60 },
+  { action: "Type one sentence describing the goal", duration_seconds: 90 },
+  { action: "List three tiny things that could move this forward", duration_seconds: 120 },
+];
+
+function planInDemoMode(input: PlannerInput): PlannerStep[] {
+  const lower = input.goal.toLowerCase();
+  const sample = DEMO_SAMPLES.find((candidate) =>
+    candidate.keywords.some((keyword) => lower.includes(keyword))
+  );
+  return (sample?.steps ?? DEMO_FALLBACK_STEPS).map((step) => ({ ...step }));
+}
+
 function buildRegeneratePrompt(
   input: PlannerInput,
   stepIndex: number,
@@ -272,6 +342,11 @@ async function regenerateStep(
  * callers (API route, test scripts) decide what to do with the result.
  */
 export async function planGoal(input: PlannerInput): Promise<PlannerStep[]> {
+  // Demo mode short-circuits the model for presentations: no API key needed.
+  if (process.env.DEMO_MODE === "true") {
+    return planInDemoMode(input);
+  }
+
   const rawSteps = await generateRawPlan(input);
   const finalSteps: PlannerStep[] = [];
 

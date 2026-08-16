@@ -27,7 +27,7 @@ create table steps (
 create table feedback (
   id uuid primary key default gen_random_uuid(),
   step_id uuid references steps(id) on delete cascade,
-  feedback_type text not null, -- done | too_hard | skip
+  feedback_type text not null, -- done | too_hard | skip | energy_dip
   created_at timestamptz default now()
 );
 

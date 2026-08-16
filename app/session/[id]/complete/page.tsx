@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 const MICRO_LABEL = "Micro-actions completed";
-const MINUTES_LABEL = "Minutes of focused effort";
+const MINUTES_LABEL = "Minutes spent";
 const BREAKS_LABEL = "Breaks taken";
 const REASSURANCE =
   "Your original goal is still there. You don't need to finish everything today.";
@@ -22,6 +22,8 @@ interface Stats {
   completed: number;
   focusedMinutes: number;
   breaks: number;
+  splits: number;
+  skips: number;
 }
 
 async function loadStats(sessionId: string): Promise<Stats | null> {
@@ -38,7 +40,7 @@ async function loadStats(sessionId: string): Promise<Stats | null> {
 
   const { data: steps, error: stepsError } = await supabase
     .from("steps")
-    .select("status, duration_seconds")
+    .select("id, status, duration_seconds, created_at, completed_at")
     .eq("session_id", sessionId);
 
   if (stepsError) {
@@ -48,14 +50,46 @@ async function loadStats(sessionId: string): Promise<Stats | null> {
 
   const done = (steps ?? []).filter((step) => step.status === "done");
   const completed = done.length;
+
+  // Real wall-clock span: from the session's earliest step to its last done
+  // step. Falls back to the sum of step durations when timestamps are odd.
   const focusedSeconds = done.reduce(
     (sum, step) => sum + (Number(step.duration_seconds) || 0),
     0
   );
-  const focusedMinutes = completed > 0 ? Math.max(1, Math.round(focusedSeconds / 60)) : 0;
+  const earliestStart = Math.min(
+    ...(steps ?? []).map((step) => Date.parse(step.created_at)).filter(Number.isFinite)
+  );
+  const latestDone = Math.max(
+    ...done.map((step) => Date.parse(step.completed_at)).filter(Number.isFinite)
+  );
+  let focusedMinutes = 0;
+  if (completed > 0) {
+    if (Number.isFinite(earliestStart) && Number.isFinite(latestDone)) {
+      focusedMinutes = Math.max(1, Math.ceil((latestDone - earliestStart) / 60_000));
+    } else {
+      focusedMinutes = Math.max(1, Math.round(focusedSeconds / 60));
+    }
+  }
+
   const breaks = Math.floor(completed / BREAK_EVERY);
 
-  return { goal: session.goal, completed, focusedMinutes, breaks };
+  // Surface the adaptation story: how many steps were split/skipped.
+  let splits = 0;
+  let skips = 0;
+  const stepIds = (steps ?? []).map((step) => step.id);
+  if (stepIds.length > 0) {
+    const { data: feedback, error: feedbackError } = await supabase
+      .from("feedback")
+      .select("feedback_type")
+      .in("step_id", stepIds);
+    if (!feedbackError && feedback) {
+      splits = feedback.filter((row) => row.feedback_type === "too_hard").length;
+      skips = feedback.filter((row) => row.feedback_type === "skip").length;
+    }
+  }
+
+  return { goal: session.goal, completed, focusedMinutes, breaks, splits, skips };
 }
 
 function Stat({ value, label }: { value: number; label: string }) {
@@ -106,6 +140,19 @@ export default async function CompletePage({ params }: CompletePageProps) {
         <Stat value={stats.focusedMinutes} label={MINUTES_LABEL} />
         <Stat value={stats.breaks} label={BREAKS_LABEL} />
       </div>
+
+      {stats.splits > 0 && (
+        <p className="mt-10 max-w-md text-sm leading-relaxed text-muted">
+          {stats.splits} step{stats.splits === 1 ? "" : "s"} felt too hard, so we split{" "}
+          {stats.splits === 1 ? "it" : "them"} into smaller ones. That&apos;s the plan working
+          with you.
+        </p>
+      )}
+      {stats.skips > 0 && (
+        <p className="mt-4 max-w-md text-sm leading-relaxed text-muted">
+          You skipped {stats.skips} step{stats.skips === 1 ? "" : "s"}. That&apos;s okay too.
+        </p>
+      )}
 
       <p className="mt-12 text-sm text-muted">{REASSURANCE}</p>
 

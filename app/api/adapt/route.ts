@@ -18,7 +18,7 @@ import type { Step } from "@/lib/types";
 const ADAPT_MODEL = process.env.OPENAI_PLANNER_MODEL || "gpt-4o-mini";
 const MAX_RETRIES = 2;
 
-const FEEDBACK_TYPES = ["too_hard", "skip"] as const;
+const FEEDBACK_TYPES = ["too_hard", "skip", "energy_dip"] as const;
 type AdaptFeedbackType = (typeof FEEDBACK_TYPES)[number];
 
 interface AdaptRequestBody {
@@ -106,6 +106,72 @@ export async function POST(request: NextRequest) {
   const currentStep = await fetchStepInSession(sessionId, stepId);
   if (!currentStep) {
     return NextResponse.json({ error: "Step not found in this session" }, { status: 404 });
+  }
+
+  if (feedbackType === "energy_dip") {
+    // User's energy dropped mid-session: regenerate every remaining pending
+    // step into a smaller, easier version (in place). The current step is left
+    // untouched so the session keeps its place.
+    const { data: pendingSteps, error: pendingError } = await supabase
+      .from("steps")
+      .select()
+      .eq("session_id", sessionId)
+      .eq("status", "pending")
+      .order("step_number", { ascending: true });
+
+    if (pendingError) {
+      console.error("[api/adapt] failed to load pending steps", pendingError);
+      return NextResponse.json({ error: "Failed to adapt session" }, { status: 500 });
+    }
+
+    for (const pending of pendingSteps ?? []) {
+      if (pending.id === currentStep.id) continue; // keep the in-view step as-is
+      const pendingStep = pending as Step;
+      try {
+        let candidate = await generateSubStep(
+          pendingStep.action,
+          "the user's energy dropped — make this smaller and easier"
+        );
+        let result = validateStep(candidate);
+        let attempts = 0;
+        while (!result.valid && attempts < MAX_RETRIES) {
+          attempts++;
+          try {
+            candidate = await generateSubStep(pendingStep.action, result.reason ?? "invalid step");
+          } catch {
+            result = { valid: false, reason: "regeneration call failed" };
+            break;
+          }
+          result = validateStep(candidate);
+        }
+        if (result.valid) {
+          const { error: updateError } = await supabase
+            .from("steps")
+            .update({ action: candidate.action, duration_seconds: candidate.duration_seconds })
+            .eq("id", pendingStep.id);
+          if (updateError) {
+            console.error("[api/adapt] energy_dip update failed", updateError);
+          }
+        }
+      } catch {
+        // Keep the original step when regeneration itself fails.
+      }
+    }
+
+    try {
+      await logFeedback(currentStep.id, "energy_dip");
+    } catch {
+      return NextResponse.json({ error: "Failed to save feedback" }, { status: 500 });
+    }
+
+    let nextStep: Step | null;
+    try {
+      nextStep = await findNextPendingStep(sessionId);
+    } catch {
+      return NextResponse.json({ error: "Failed to load session steps" }, { status: 500 });
+    }
+
+    return NextResponse.json({ step: nextStep });
   }
 
   if (feedbackType === "skip") {

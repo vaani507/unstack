@@ -17,8 +17,10 @@ const COMPLETED_STEPS_PER_BREAK = 3; // Show a break after every N completed ste
 const BREAK_DURATION_MS = 60_000; // Break length in ms (60 seconds).
 // Safety valve: to let the user skip the break, set this to the minimum
 // time (in ms) that must elapse first, e.g. 20_000 for a 20-second floor.
-// null (the default) = no skip button — the break must finish first.
-const BREAK_SKIP_AFTER_MS: number | null = null;
+// null = no skip button — the break must finish first.
+const BREAK_SKIP_AFTER_MS: number | null = 20_000;
+
+const QUICK_DONE_THRESHOLD_MS = 3000;
 
 const BREAK_LINES = [
   "Look away from the screen.",
@@ -26,7 +28,37 @@ const BREAK_LINES = [
   "Take a sip of water.",
 ];
 
-type Phase = "not-started" | "running" | "transitioning" | "break";
+type Phase = "not-started" | "running" | "transitioning" | "break" | "paused";
+
+/** Gentle two-note chime for break starts. Opt-in via the appearance menu. */
+function playBreakChime() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const gain = context.createGain();
+    gain.connect(context.destination);
+    gain.gain.value = 0.12;
+
+    const play = (frequency: number, delay: number, duration: number) => {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start(context.currentTime + delay);
+      oscillator.stop(context.currentTime + delay + duration);
+    };
+    play(523.25, 0, 0.35);
+    play(783.99, 0.4, 0.5);
+    window.setTimeout(() => {
+      void context.close();
+    }, 1600);
+  } catch {
+    // Audio unavailable — ignore.
+  }
+}
 
 interface Props {
   sessionId: string;
@@ -42,7 +74,7 @@ function formatClock(totalMs: number): string {
 
 export default function SessionScreen({ sessionId, initialData }: Props) {
   const router = useRouter();
-  const { mode } = useSensoryMode();
+  const { mode, breakSound, reducedMotion } = useSensoryMode();
 
   const isFocus = mode === "focus";
   const isLow = mode === "low";
@@ -58,6 +90,9 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
   const [remainingMs, setRemainingMs] = useState(durationMs);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // "That was quick" confirmation while a step is running.
+  const [confirmQuickDone, setConfirmQuickDone] = useState(false);
 
   // Which number step we're on (for the "01 / 08" counter).
   const [stepIndex, setStepIndex] = useState(1);
@@ -79,6 +114,19 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
   const sessionStartRef = useRef(0);
 
   const timeUp = remainingMs <= 0;
+
+  // Chime + light haptic when the break starts, if opted in.
+  useEffect(() => {
+    if (phase !== "break" || !breakSound || reducedMotion) return;
+    playBreakChime();
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate?.(120);
+      } catch {
+        // Haptics unavailable — ignore.
+      }
+    }
+  }, [phase, breakSound, reducedMotion]);
 
   const applyStep = useCallback((step: Step) => {
     setStepId(step.id);
@@ -197,7 +245,7 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
     if (next) loadNext(next);
   }
 
-  async function handleDone() {
+  async function finishDone() {
     if (!stepId || isBusy) return;
     setIsBusy(true);
     setError(null);
@@ -236,6 +284,27 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
     } finally {
       setIsBusy(false);
     }
+  }
+
+  function handleDone() {
+    if (!stepId || isBusy) return;
+    // If the timer barely started and the user claims done, gently confirm.
+    const elapsedMs = durationMs - remainingMs;
+    if (phase === "running" && !timeUp && elapsedMs < QUICK_DONE_THRESHOLD_MS) {
+      setConfirmQuickDone(true);
+      return;
+    }
+    void finishDone();
+  }
+
+  function handleQuickDoneConfirmed() {
+    setConfirmQuickDone(false);
+    void finishDone();
+  }
+
+  function handleQuickSplit() {
+    setConfirmQuickDone(false);
+    void handleTooHard();
   }
 
   async function handleTooHard() {
@@ -285,6 +354,48 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
     }
   }
 
+  function handlePause() {
+    setConfirmQuickDone(false);
+    setPhase("paused");
+  }
+
+  function handleResume() {
+    setPhase("running");
+  }
+
+  function handleLeave() {
+    router.push("/");
+  }
+
+  async function handleEnergyDip() {
+    if (!stepId || isBusy) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/adapt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, stepId, feedbackType: "energy_dip" }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error("energy dip failed");
+
+      const next = data?.step as Step | null | undefined;
+      if (next && next.id === stepId) {
+        // The in-view step itself was made smaller — keep our place.
+        applyStep(next);
+        setPhase("transitioning");
+        window.setTimeout(() => setPhase("not-started"), SMALLER_DURATION_MS);
+      } else if (next) {
+        loadNext(next);
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   if (!initialData || !action || !stepId) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col items-center justify-center px-6 py-16 text-center">
@@ -320,9 +431,9 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
       {/* Step counter — small, top corner, subordinate. Hidden before start,
           during break, and in Focus mode. */}
       <p
-        aria-hidden={phase === "not-started" || phase === "break" || isFocus}
+        aria-hidden={phase === "not-started" || phase === "break" || phase === "paused" || isFocus}
         className={`self-end text-[11px] font-medium tabular-nums text-muted/70 transition-opacity duration-300 ${
-          phase === "not-started" || phase === "break" || isFocus
+          phase === "not-started" || phase === "break" || phase === "paused" || isFocus
             ? "opacity-0"
             : "opacity-100"
         }`}
@@ -330,8 +441,44 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
         {String(stepIndex).padStart(2, "0")} / {String(totalSteps).padStart(2, "0")}
       </p>
 
+      {phase === "running" && (
+        <button
+          type="button"
+          onClick={handlePause}
+          aria-label="Pause session"
+          className="absolute left-4 top-4 z-50 inline-flex h-11 items-center justify-center rounded-full border border-border bg-surface/60 px-4 text-xs font-medium uppercase tracking-wide text-muted transition-colors hover:bg-surface hover:text-foreground"
+        >
+          Pause
+        </button>
+      )}
+
       <div className="mt-12 flex w-full max-w-lg flex-col items-center">
-        {phase === "break" ? (
+        {phase === "paused" ? (
+          <div className="flex w-full flex-col items-center text-center">
+            <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">Paused</p>
+            <p className="mt-8 text-2xl font-medium text-foreground">Your progress is saved.</p>
+            <p className="mt-3 text-sm text-muted">
+              The next step will still be here when you come back.
+            </p>
+            <p className="mt-8 text-sm text-muted">{action}</p>
+            <div className="mt-10 flex w-full max-w-sm flex-col items-stretch gap-3">
+              <button
+                type="button"
+                onClick={handleResume}
+                className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-10 text-sm font-semibold uppercase tracking-wide text-accent-foreground transition-colors"
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                onClick={handleLeave}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-border px-8 text-xs font-medium uppercase tracking-wide text-muted transition-colors hover:text-foreground"
+              >
+                Come back later
+              </button>
+            </div>
+          </div>
+        ) : phase === "break" ? (
           <div className="flex w-full flex-col items-center text-center">
             <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">
               Time for a break
@@ -444,7 +591,39 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
           </button>
         )}
 
-        {phase === "running" && (
+        {phase === "running" && confirmQuickDone ? (
+          <div className="mt-12 flex w-full max-w-md flex-col items-stretch gap-3 text-center">
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-accent">
+              Still going?
+            </p>
+            <p className="-mt-1 text-lg font-medium text-foreground">
+              That was quick — did the step finish?
+            </p>
+            <button
+              type="button"
+              onClick={handleQuickDoneConfirmed}
+              disabled={isBusy}
+              className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-10 text-sm font-semibold uppercase tracking-wide text-accent-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              It&apos;s done
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickSplit}
+              disabled={isBusy}
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-border bg-transparent px-10 text-sm font-medium uppercase tracking-wide text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Make it smaller
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmQuickDone(false)}
+              className="inline-flex min-h-11 items-center justify-center rounded-full px-8 text-xs font-medium uppercase tracking-wide text-muted transition-colors hover:text-foreground"
+            >
+              Not yet
+            </button>
+          </div>
+        ) : phase === "running" && (
           <div className="mt-12 flex w-full max-w-md flex-col items-stretch gap-3">
             <button
               type="button"
@@ -474,6 +653,15 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
             >
               Skip
             </button>
+
+            <button
+              type="button"
+              onClick={handleEnergyDip}
+              disabled={isBusy}
+              className="mt-1 self-center text-xs text-muted underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Energy dipped — make the rest smaller
+            </button>
           </div>
         )}
       </div>
@@ -482,9 +670,11 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
       <p aria-live="polite" className="sr-only">
         {phase === "break"
           ? "Time for a break."
-          : action
-            ? `Next step: ${action}`
-            : ""}
+          : phase === "paused"
+            ? "Session paused. Your progress is saved."
+            : action
+              ? `Next step: ${action}`
+              : ""}
       </p>
     </main>
   );

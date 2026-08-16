@@ -6,6 +6,7 @@ export type SensoryMode = "calm" | "focus" | "low";
 
 const MODE_KEY = "unstack:sensory-mode";
 const SCALE_KEY = "unstack:text-scale";
+const BREAK_SOUND_KEY = "unstack:break-sound";
 
 const TEXT_SCALE_MIN = 1;
 const TEXT_SCALE_MAX = 1.5;
@@ -43,6 +44,7 @@ function emit(): void {
 let modeValue: SensoryMode = "calm";
 let textScaleValue = 1;
 let systemReducedValue = false;
+let breakSoundValue = false;
 
 function readStored<T>(key: string, parse: (raw: string) => T | null): T | null {
   if (typeof window === "undefined") return null;
@@ -77,6 +79,13 @@ function setTextScaleStore(next: number): void {
   emit();
 }
 
+function setBreakSoundStore(next: boolean): void {
+  if (breakSoundValue === next) return;
+  breakSoundValue = next;
+  writeStored(BREAK_SOUND_KEY, String(next));
+  emit();
+}
+
 interface SensoryModeContextValue {
   /** Current manual selection. */
   mode: SensoryMode;
@@ -88,6 +97,9 @@ interface SensoryModeContextValue {
   /** Root font-size multiplier (100%–150%). */
   textScale: number;
   setTextScale: (multiplier: number) => void;
+  /** Opt-in gentle chime when a break starts. */
+  breakSound: boolean;
+  setBreakSound: (enabled: boolean) => void;
 }
 
 const SensoryModeContext = createContext<SensoryModeContextValue | null>(null);
@@ -95,6 +107,11 @@ const SensoryModeContext = createContext<SensoryModeContextValue | null>(null);
 export function SensoryModeProvider({ children }: { children: ReactNode }) {
   const mode = useSyncExternalStore(subscribe, () => modeValue, () => "calm" as const);
   const textScale = useSyncExternalStore(subscribe, () => textScaleValue, () => 1 as const);
+  const breakSound = useSyncExternalStore(
+    subscribe,
+    () => breakSoundValue,
+    () => false as const
+  );
   const systemReducedMotion = useSyncExternalStore(
     subscribe,
     () => systemReducedValue,
@@ -115,6 +132,10 @@ export function SensoryModeProvider({ children }: { children: ReactNode }) {
 
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
     systemReducedValue = mql.matches;
+
+    const storedSound = readStored(BREAK_SOUND_KEY, (raw) => (raw === "true" ? true : null));
+    if (storedSound !== null) breakSoundValue = storedSound;
+
     const onChange = (event: MediaQueryListEvent) => {
       systemReducedValue = event.matches;
       emit();
@@ -128,6 +149,7 @@ export function SensoryModeProvider({ children }: { children: ReactNode }) {
 
   const setMode = useCallback((next: SensoryMode) => setModeStore(next), []);
   const setTextScale = useCallback((next: number) => setTextScaleStore(next), []);
+  const setBreakSound = useCallback((next: boolean) => setBreakSoundStore(next), []);
 
   // OS-level reduced motion wins over the manual toggle for motion settings,
   // regardless of what the user picked.
@@ -146,8 +168,17 @@ export function SensoryModeProvider({ children }: { children: ReactNode }) {
   }, [textScale]);
 
   const value = useMemo(
-    () => ({ mode, setMode, reducedMotion, systemReducedMotion, textScale, setTextScale }),
-    [mode, setMode, reducedMotion, systemReducedMotion, textScale, setTextScale]
+    () => ({
+      mode,
+      setMode,
+      reducedMotion,
+      systemReducedMotion,
+      textScale,
+      setTextScale,
+      breakSound,
+      setBreakSound,
+    }),
+    [mode, setMode, reducedMotion, systemReducedMotion, textScale, setTextScale, breakSound, setBreakSound]
   );
 
   return <SensoryModeContext.Provider value={value}>{children}</SensoryModeContext.Provider>;

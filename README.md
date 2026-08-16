@@ -43,6 +43,12 @@ re-splits any step you flag as "too hard."
 
    These are public/browser-safe; never commit `.env.local` (it's gitignored).
 
+### Demo mode (no model needed)
+
+Set `DEMO_MODE=true` in `.env.local` to skip the model entirely and return
+curated micro-step plans (exam, desk, email, resume keywords). This lets the
+pitch run offline, with no API key, and with no network dependence.
+
 ### Run the planner without OpenAI (Ollama)
 
 The planner only speaks an OpenAI-compatible chat API, so you can run it
@@ -115,6 +121,24 @@ The core idea: **LLM generates, deterministic rules enforce.**
 
 ## Sensory modes
 
-Top-right menu on the session screen switches between **Calm**, **Focus**, and
-**Low stimulation**, and scales the root text size (100–150%). The OS
+Top-right menu (on the home and session screens) switches between **Calm**,
+**Focus**, and **Low stimulation**, scales the root text size (100–150%), and
+toggles an optional chime + haptic when a break starts. The OS
 `prefers-reduced-motion` setting always wins for animations.
+
+## Session heartbeat
+
+The session screen adds a **Pause** overlay (progress is saved; come back
+later), a gentle "That was quick — did the step finish?" confirmation for
+instant completions, and an **Energy dipped — make the rest smaller** control
+that regenerates all remaining steps into easier ones (logged as
+`energy_dip`). Breaks become skippable after 20 seconds.
+
+## Tests
+
+```bash
+npm test
+```
+
+Vitest covers the planner validator rules plus the generate → validate →
+regenerate → fallback pipeline (model output is mocked).

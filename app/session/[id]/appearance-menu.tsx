@@ -41,7 +41,15 @@ function CheckIndicator() {
 }
 
 export default function AppearanceMenu() {
-  const { mode, setMode, systemReducedMotion, textScale, setTextScale } = useSensoryMode();
+  const {
+    mode,
+    setMode,
+    systemReducedMotion,
+    textScale,
+    setTextScale,
+    breakSound,
+    setBreakSound,
+  } = useSensoryMode();
   const [open, setOpen] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -167,6 +175,33 @@ export default function AppearanceMenu() {
               A+
             </button>
           </div>
+
+          <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.2em] text-muted">
+            Break sound
+          </p>
+          <label className="mt-3 flex cursor-pointer items-center justify-between gap-4">
+            <span className="text-sm text-foreground">Chime when a break starts</span>
+            <span
+              aria-hidden
+              role="switch"
+              aria-checked={breakSound}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors ${
+                breakSound ? "bg-accent" : "bg-surface"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-foreground transition-transform ${
+                  breakSound ? "translate-x-5" : "translate-x-1"
+                }`}
+              />
+            </span>
+            <input
+              type="checkbox"
+              checked={breakSound}
+              onChange={(event) => setBreakSound(event.target.checked)}
+              className="sr-only"
+            />
+          </label>
 
           {systemReducedMotion && (
             <p className="mt-4 text-xs text-muted">

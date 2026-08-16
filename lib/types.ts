@@ -9,7 +9,7 @@ export type TimeAvailable = "5min" | "15min" | "30min" | "1hour";
 
 export type StepStatus = "pending" | "done" | "skipped" | "too_hard";
 
-export type FeedbackType = "done" | "too_hard" | "skip";
+export type FeedbackType = "done" | "too_hard" | "skip" | "energy_dip";
 
 export interface Session {
   id: string;
