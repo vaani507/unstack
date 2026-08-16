@@ -37,9 +37,9 @@ re-splits any step you flag as "too hard."
 
    - `OPENAI_API_KEY` — from the [OpenAI dashboard](https://platform.openai.com/api-keys)
    - `NEXT_PUBLIC_SUPABASE_URL` — your project URL, e.g. `https://<ref>.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — the publishable key from
-     **Project Settings → API Keys** (newer projects call it "Publishable key";
-     it is the drop-in replacement for the legacy `anon` key)
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — the publishable key from
+     **Project Settings → API Keys** (older projects may still show the legacy
+     `anon` key, which is also accepted via `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
 
    These are public/browser-safe; never commit `.env.local` (it's gitignored).
 
