@@ -77,9 +77,15 @@ describe("planGoal (demo mode)", () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
-  it("matches common goal keywords (exam sample has 6 steps)", async () => {
+  it("matches common goal keywords, scaled to a 15 min budget (5 steps)", async () => {
     const steps = await planGoal(input);
-    expect(steps.length).toBe(6);
+    expect(steps.length).toBe(5);
+    expect(steps[0].action).toBe("Open the unit page in your browser");
+  });
+
+  it("returns the full 10-step plan for a 1-hour budget", async () => {
+    const steps = await planGoal({ ...input, timeAvailable: "1hour" });
+    expect(steps.length).toBe(10);
   });
 });
 
@@ -101,7 +107,32 @@ describe("planGoal (live pipeline)", () => {
     const steps: PlannerStep[] = await planGoal(input);
     expect(steps).toHaveLength(1);
     expect(steps[0]).toEqual({ action: "Open a blank note or document", duration_seconds: 20 });
-    // 1 initial generation + 2 regeneration retries.
-    expect(createMock).toHaveBeenCalledTimes(3);
+    // 1 initial generation + 2 regeneration retries + 3 expansion attempts.
+    expect(createMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("expands a too-short plan up to the minimum length", async () => {
+    createMock
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: '{"steps":[{"action":"Open the book","duration_seconds":30}]}' } }],
+      })
+      .mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content:
+                '{"steps":[' +
+                '{"action":"Read the first page","duration_seconds":60},' +
+                '{"action":"Highlight a key idea","duration_seconds":60},' +
+                '{"action":"Write down one question","duration_seconds":60},' +
+                '{"action":"Type a one-line summary","duration_seconds":60}' +
+                "]}",
+            },
+          },
+        ],
+      });
+    const steps = await planGoal(input);
+    expect(steps.length).toBeGreaterThanOrEqual(4);
+    expect(steps[0].action).toBe("Open the book");
   });
 });

@@ -399,7 +399,7 @@ export default function SessionScreen({ sessionId, initialData }: Props) {
   if (!initialData || !action || !stepId) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col items-center justify-center px-6 py-16 text-center">
-        <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">
+        <p className="text-sm font-medium uppercase tracking-[0.3em] text-accent">
           Unstack
         </p>
         <h1 className="mt-12 text-xl font-medium text-foreground">

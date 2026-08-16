@@ -42,6 +42,7 @@ Rules:
 8. The first action should be extremely easy to initiate (near-zero activation energy).
 9. Respect the user's stated energy level — low energy gets smaller, easier first steps.
 10. Respect their available time — total steps should roughly fit the time budget.
+11. Produce at least 4 steps total.
 Return ONLY valid JSON: { steps: [{ action: string, duration_seconds: number }] }
 No markdown, no preamble.`;
 
@@ -225,6 +226,11 @@ export function validateStep(step: PlannerStep): ValidationResult {
 
 const MAX_RETRIES_PER_STEP = 2;
 
+// Short plans feel like the app "stops" after one action. Enforce a minimum
+// step count by asking the model to extend short plans.
+const MIN_PLAN_STEPS = Number(process.env.MIN_PLAN_STEPS ?? 4);
+const MAX_PLAN_EXPANSIONS = 3;
+
 // Manually-safe generic first step used only if a step still fails validation
 // after all retries — deliberately goal-agnostic and trivially easy.
 const FALLBACK_STEP: PlannerStep = {
@@ -241,50 +247,78 @@ interface DemoSample {
   steps: PlannerStep[];
 }
 
+// Demo plans are concrete, specific micro-actions — the kind a real session
+// produces — so the pitch video shows satisfying, unfakeable progress.
 const DEMO_SAMPLES: DemoSample[] = [
   {
     keywords: ["exam", "study", "test", "revision"],
     steps: [
-      { action: "Open the course page in your browser", duration_seconds: 40 },
-      { action: "Read the first unit heading", duration_seconds: 60 },
-      { action: "Write down one exam topic on a sticky note", duration_seconds: 60 },
-      { action: "Read the first two lines of the unit notes", duration_seconds: 60 },
-      { action: "Highlight one key term you don't recognize", duration_seconds: 90 },
-      { action: "Type that term onto a blank flashcard", duration_seconds: 90 },
+      { action: "Open the unit page in your browser", duration_seconds: 40 },
+      { action: "Read the first topic heading", duration_seconds: 60 },
+      { action: "Write down the one topic that scares you most", duration_seconds: 60 },
+      { action: "Open the notes for that topic", duration_seconds: 30 },
+      { action: "Copy the first two key terms onto a flashcard", duration_seconds: 90 },
+      { action: "Write a one-line summary of the first section", duration_seconds: 90 },
+      { action: "Do one practice question from the past paper", duration_seconds: 120 },
+      { action: "Check the answer and write what you missed", duration_seconds: 60 },
+      { action: "Highlight the next topic to review", duration_seconds: 60 },
+      { action: "Clear an empty spot on your desk for studying", duration_seconds: 60 },
     ],
   },
   {
     keywords: ["desk", "room", "clean", "tidy", "laundry", "organiz"],
     steps: [
-      { action: "Set a timer on your phone for 3 minutes", duration_seconds: 20 },
-      { action: "Put one empty cup or plate in the kitchen", duration_seconds: 60 },
-      { action: "Throw away one item of trash from your desk", duration_seconds: 60 },
-      { action: "Stack one pile of loose papers together", duration_seconds: 90 },
-      { action: "Wipe the desk surface with a cloth", duration_seconds: 120 },
+      { action: "Set a 3-minute timer on your phone", duration_seconds: 20 },
+      { action: "Carry one empty cup or plate to the kitchen", duration_seconds: 60 },
+      { action: "Throw away the first piece of trash you see", duration_seconds: 60 },
+      { action: "Put one pile of loose papers into a folder", duration_seconds: 60 },
+      { action: "Wipe the desk surface with a damp cloth", duration_seconds: 90 },
+      { action: "Sort the laundry into lights and darks", duration_seconds: 120 },
+      { action: "Start one load of laundry", duration_seconds: 60 },
+      { action: "Tidy one shelf by putting items back in place", duration_seconds: 120 },
+      { action: "Sweep or vacuum one small area of the floor", duration_seconds: 120 },
+      { action: "Make the bed once the clutter is off it", duration_seconds: 90 },
     ],
   },
   {
     keywords: ["email", "message", "reply", "inbox"],
     steps: [
       { action: "Open your inbox", duration_seconds: 30 },
-      { action: "Sort the inbox by oldest message first", duration_seconds: 60 },
-      { action: "Reply to the oldest single message with one sentence", duration_seconds: 120 },
+      { action: "Sort the inbox by oldest message first", duration_seconds: 30 },
+      { action: "Reply to the oldest message with one sentence", duration_seconds: 120 },
       { action: "Mark the next unread message as read", duration_seconds: 30 },
-      { action: "Forward one message you can't answer to someone who can", duration_seconds: 90 },
+      { action: "Forward one message you can't answer", duration_seconds: 90 },
+      { action: "File five messages into folders", duration_seconds: 90 },
+      { action: "Unsubscribe from one mailing list", duration_seconds: 90 },
+      { action: "Star the one message you must act on today", duration_seconds: 30 },
+      { action: "Draft a two-line reply to a message from your boss", duration_seconds: 120 },
+      { action: "Move your inbox down to zero unread messages", duration_seconds: 90 },
     ],
   },
   {
     keywords: ["resume", "cv", "apply", "internship", "job", "cover letter"],
     steps: [
-      { action: "Find your most recent resume file on this computer", duration_seconds: 60 },
-      { action: "Open the resume file", duration_seconds: 30 },
+      { action: "Open the resume file on this computer", duration_seconds: 30 },
       { action: "Read the first bullet under your latest role", duration_seconds: 60 },
-      { action: "Type one clear verb into the start of that bullet", duration_seconds: 90 },
-      { action: "Save a copy of the file named with today's date", duration_seconds: 60 },
-      { action: "Type the job name you're applying to into a search bar", duration_seconds: 60 },
+      { action: "Fix one typo or broken space in that bullet", duration_seconds: 60 },
+      { action: "Replace a weak verb like 'helped' with 'built'", duration_seconds: 90 },
+      { action: "Add one real number to the next bullet — hours, cost, or people", duration_seconds: 90 },
+      { action: "Move your email and phone number to the top of the page", duration_seconds: 30 },
+      { action: "Make every heading the same font size", duration_seconds: 60 },
+      { action: "Delete one sentence a stranger wouldn't understand", duration_seconds: 90 },
+      { action: "Read the first page out loud and shorten one long sentence", duration_seconds: 120 },
+      { action: "Save a copy of the file named resume_v2.pdf", duration_seconds: 30 },
     ],
   },
 ];
+
+// Long time budgets earn longer plans (and the "01 / 10" counter looks right).
+const DEMO_STEP_TARGETS: Record<TimeAvailable, number> = {
+  "5min": 3,
+  "15min": 5,
+  "30min": 8,
+  "1hour": 10,
+};
 
 const DEMO_FALLBACK_STEPS: PlannerStep[] = [
   { action: "Write your goal on a sticky note", duration_seconds: 60 },
@@ -292,6 +326,11 @@ const DEMO_FALLBACK_STEPS: PlannerStep[] = [
   { action: "Open a blank document on this computer", duration_seconds: 60 },
   { action: "Type one sentence describing the goal", duration_seconds: 90 },
   { action: "List three tiny things that could move this forward", duration_seconds: 120 },
+  { action: "Circle the one with the smallest first step", duration_seconds: 60 },
+  { action: "Do that smallest step right now", duration_seconds: 120 },
+  { action: "Write down what just happened in one line", duration_seconds: 60 },
+  { action: "Choose the one thing to do after this break", duration_seconds: 60 },
+  { action: "Save your plan somewhere you can find tomorrow", duration_seconds: 60 },
 ];
 
 function planInDemoMode(input: PlannerInput): PlannerStep[] {
@@ -299,7 +338,9 @@ function planInDemoMode(input: PlannerInput): PlannerStep[] {
   const sample = DEMO_SAMPLES.find((candidate) =>
     candidate.keywords.some((keyword) => lower.includes(keyword))
   );
-  return (sample?.steps ?? DEMO_FALLBACK_STEPS).map((step) => ({ ...step }));
+  const allSteps = sample?.steps ?? DEMO_FALLBACK_STEPS;
+  const target = Math.min(allSteps.length, DEMO_STEP_TARGETS[input.timeAvailable] ?? allSteps.length);
+  return allSteps.slice(0, Math.max(1, target)).map((step) => ({ ...step }));
 }
 
 function buildRegeneratePrompt(
@@ -330,6 +371,27 @@ async function regenerateStep(
   const prompt = buildRegeneratePrompt(input, stepIndex, failedStep, reason);
   const parsed = (await callPlannerModel(prompt)) as { action?: unknown; duration_seconds?: unknown };
   return coerceStep(parsed);
+}
+
+function buildExpandPrompt(input: PlannerInput, currentCount: number): string {
+  return [
+    `Original goal: "${input.goal}"`,
+    `Energy level: ${input.energyLevel}`,
+    `Time available: ${input.timeAvailable}`,
+    `A first version of the plan already has ${currentCount} step(s).`,
+    `Extend it with more concrete micro-actions so the total reaches at least ${MIN_PLAN_STEPS} steps.`,
+    `Rules: each step 3 minutes or less, exactly one action per step, start with a concrete verb, no 'and', no questions.`,
+    `Return ONLY valid JSON: { steps: [{ action: string, duration_seconds: number }] }`,
+    `No markdown, no preamble.`,
+  ].join("\n");
+}
+
+async function expandPlan(input: PlannerInput, currentCount: number): Promise<PlannerStep[]> {
+  const parsed = (await callPlannerModel(buildExpandPrompt(input, currentCount))) as RawPlanResponse;
+  if (!parsed || !Array.isArray(parsed.steps)) {
+    return [];
+  }
+  return parsed.steps.map(coerceStep);
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +436,27 @@ export async function planGoal(input: PlannerInput): Promise<PlannerStep[]> {
   // Guarantee at least one step even if the model returned an empty array.
   if (finalSteps.length === 0) {
     finalSteps.push({ ...FALLBACK_STEP });
+  }
+
+  // Always aim for a satisfying multi-step sequence: extend short plans until
+  // the minimum length is reached (best-effort — stop if the model fails).
+  let expansionAttempts = 0;
+  while (finalSteps.length < MIN_PLAN_STEPS && expansionAttempts < MAX_PLAN_EXPANSIONS) {
+    expansionAttempts++;
+    try {
+      const extra = await expandPlan(input, finalSteps.length);
+      for (const candidate of extra) {
+        if (finalSteps.length >= MIN_PLAN_STEPS) break;
+        if (validateStep(candidate).valid) {
+          finalSteps.push(candidate);
+        }
+      }
+      // Bail early when the model returns nothing usable.
+      if (extra.length === 0) break;
+    } catch {
+      console.warn("[planner] plan expansion failed, keeping shorter plan");
+      break;
+    }
   }
 
   return finalSteps;

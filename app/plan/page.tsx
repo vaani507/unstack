@@ -39,7 +39,7 @@ export default async function PlanPage({ searchParams }: PlanPageProps) {
   if (!sessionId) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-6 py-16">
-        <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">Unstack</p>
+        <p className="text-sm font-medium uppercase tracking-[0.3em] text-accent">Unstack</p>
         <h1 className="mt-12 text-xl font-medium text-foreground">No plan to show yet.</h1>
         <p className="mt-3 text-sm text-muted">
           Start a new plan from the beginning to make something doable.
@@ -59,7 +59,7 @@ export default async function PlanPage({ searchParams }: PlanPageProps) {
   if (!plan) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-6 py-16">
-        <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">Unstack</p>
+        <p className="text-sm font-medium uppercase tracking-[0.3em] text-accent">Unstack</p>
         <h1 className="mt-12 text-xl font-medium text-foreground">We couldn&apos;t find that plan.</h1>
         <p className="mt-3 text-sm text-muted">
           It may have been removed, or the session is already finished.

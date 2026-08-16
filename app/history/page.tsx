@@ -88,7 +88,7 @@ export default async function HistoryPage() {
     <main className="mx-auto w-full max-w-3xl px-6 py-16">
       <header className="flex items-baseline justify-between gap-4">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">
+          <p className="text-sm font-medium uppercase tracking-[0.3em] text-accent">
             Unstack
           </p>
           <h1 className="mt-3 text-2xl font-semibold text-foreground">Past sessions</h1>

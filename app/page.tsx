@@ -90,7 +90,7 @@ export default function Home() {
       <AppearanceMenu />
 
       <header className="mb-14">
-        <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-accent">
+        <p className="text-sm font-medium uppercase tracking-[0.3em] text-accent">
           Unstack
         </p>
         <p className="mt-3 text-sm text-muted">{TAGLINE}</p>
