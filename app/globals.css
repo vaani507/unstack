@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/*
+  Calm, low-stimulation palette for "unstack".
+  Soft warm neutrals + a single muted sage accent. No bright gradients.
+*/
+:root {
+  --background: #faf9f6; /* warm off-white */
+  --foreground: #2b2b28; /* soft near-black, warm-toned */
+  --surface: #f1efea; /* cards / panels, slightly darker than bg */
+  --muted: #6b6862; /* secondary text */
+  --border: #e3e0d9;
+  --accent: #6b8f71; /* single muted sage accent */
+  --accent-foreground: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1b19;
+    --foreground: #ede9e3;
+    --surface: #262420;
+    --muted: #9c988f;
+    --border: #3a3733;
+    --accent: #7fa889;
+    --accent-foreground: #12140f;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/*
+  Focus visibility — one clearly-visible treatment across the palette.
+  Radio inputs are excluded because every radio lives inside a styled label
+  that draws its own ring when the input is focused.
+*/
+:where(
+    a[href],
+    button,
+    input:not([type="hidden"]):not([type="radio"]),
+    textarea,
+    select,
+    [role="button"],
+    [role="radio"],
+    [role="switch"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Low Stimulation: higher-contrast tokens, flattened shadows. */
+[data-sensory-mode="low"] {
+  --muted: #4c4a43;
+  --border: #a9a294;
+  --surface: #ece9e2;
+  --accent: #55715b;
+  --accent-foreground: #12140f;
+}
+
+[data-sensory-mode="low"] .shadow-sm,
+[data-sensory-mode="low"] .shadow-md {
+  box-shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-sensory-mode="low"] {
+    --muted: #c3bfb5;
+    --border: #6a655c;
+    --surface: #2b2925;
+    --accent: #8fae96;
+    --accent-foreground: #0f110e;
+  }
+}
+
+/*
+  Reduced motion — applied both when the OS prefers reduced motion AND when
+  the manual mode is Low Stimulation (html[data-reduced-motion]).
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

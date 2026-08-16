@@ -1,0 +1,32 @@
+-- unstack: Supabase schema
+-- Run this in the Supabase SQL editor.
+
+create table sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid,
+  goal text not null,
+  energy_level text,
+  time_available text,
+  sensory_mode text default 'calm',
+  created_at timestamptz default now(),
+  completed_at timestamptz
+);
+
+create table steps (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references sessions(id) on delete cascade,
+  step_number int not null,
+  action text not null,
+  duration_seconds int not null,
+  status text default 'pending', -- pending | done | skipped | too_hard
+  difficulty text,
+  created_at timestamptz default now(),
+  completed_at timestamptz
+);
+
+create table feedback (
+  id uuid primary key default gen_random_uuid(),
+  step_id uuid references steps(id) on delete cascade,
+  feedback_type text not null, -- done | too_hard | skip
+  created_at timestamptz default now()
+);
