@@ -162,17 +162,6 @@ This runs the planner against 10 sample goals and prints the generated steps —
 
 ---
 
-## Deployment
-
-Deploy to [Vercel](https://vercel.com):
-
-1. Push your repo to GitHub
-2. Import it on [vercel.com/new](https://vercel.com/new)
-3. Add your `.env.local` values under **Environment Variables** in the project settings
-4. Deploy
-
----
-
 ## Environment Variables
 
 | Variable | Description |
@@ -182,16 +171,6 @@ Deploy to [Vercel](https://vercel.com):
 | `OPENAI_PLANNER_MODEL` | Model name to use (default: `gpt-4o-mini`) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
-
----
-
-## What's Next
-
-- Session history with adaptive learning from past feedback
-- Sensory pacing themes (visual countdowns, calm / focus / energize modes)
-- Break enforcement counters (Pomodoro-style)
-- Campus ADHD support center integration
-- Native mobile app
 
 ---
 
